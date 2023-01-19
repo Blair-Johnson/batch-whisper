@@ -184,6 +184,9 @@ class MaximumLikelihoodRanker(SequenceRanker):
             for logprob, length in zip(logprobs, lengths):
                 if self.length_penalty is None:
                     penalty = length
+                    if penalty == 0:
+                        # hackey workaround for div zero error that pops up sometimes
+                        penalty = 1.0
                 else:
                     # from the Google NMT paper
                     penalty = ((5 + length) / 6) ** self.length_penalty
@@ -711,11 +714,16 @@ class DecodingTask:
 
                 if type(self.decoder) == list:
                     # handle batched case
+                    # this is currently inefficient to avoid caching issues
                     completed = []
                     new_tokens = []
                     for i in range(len(self.decoder)):
                         # expand the tokens tensor with the selected next tokens
-                        token_slice, comp = self.decoder[i].update(tokens[i].unsqueeze(0), logits[i].unsqueeze(0), sum_logprobs[i].unsqueeze(0))
+                        idx = i * self.n_group
+                        idx_end = idx + self.n_group
+                        # running whole batch through each decoder and selecting relevant slice to avoid inference caching issues
+                        token_slice, comp = self.decoder[i].update(tokens, logits, sum_logprobs)
+                        token_slice = token_slice[idx: idx_end]
                         new_tokens.append(token_slice)
                         completed.append(comp)
                     tokens = torch.cat(new_tokens, dim=0)
@@ -773,7 +781,8 @@ class DecodingTask:
 
         # reshape the tensors to have (n_audio, n_group) as the first two dimensions
         audio_features = audio_features[:: self.n_group]
-        no_speech_probs = no_speech_probs[:: self.n_group]
+        if type(self.initial_tokens) != list: 
+            no_speech_probs = no_speech_probs[:: self.n_group]
         assert audio_features.shape[0] == len(no_speech_probs) == n_audio
 
         tokens = tokens.reshape(n_audio, self.n_group, -1)
@@ -784,10 +793,12 @@ class DecodingTask:
             sum_logprobs_new = []
             for i in range(len(self.decoder)):
                 # get the final candidates for each group, and slice between the first sampled token and EOT
-                token_slice, sum_logprob_slice = self.decoder[i].finalize(tokens[i].unsqueeze(0), sum_logprobs[i].unsqueeze(0))
-                new_tokens.append(token_slice)
-                sum_logprobs_new.append(sum_logprob_slice[0])
-            tokens = torch.cat(new_tokens, dim=0)
+                token_slice, sum_logprob_slice = self.decoder[i].finalize(tokens, sum_logprobs)
+                new_tokens.append(token_slice[:][i])
+                sum_logprobs_new.append(sum_logprob_slice[i])
+            # error here, expected tensor at element 0 of new_tokens but got list
+            tokens = new_tokens
+            #tokens = torch.cat(new_tokens, dim=0)
             sum_logprobs = sum_logprobs_new
         else:
             # get the final candidates for each group, and slice between the first sampled token and EOT
