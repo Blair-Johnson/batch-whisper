@@ -1,4 +1,6 @@
-# Whisper + Batch Processing Support
+# [Deprecated] Whisper + Batch Processing Support
+
+Long-form batch processing in whisper is now supported in [HuggingFace Transformers](huggingface/transformers#27658). Please use that version if you need this feature as it has ongoing support and additional optimizations over the base whisper implementation (which this repo is based on).
 
 [[Blog]](https://openai.com/blog/whisper)
 [[Paper]](https://arxiv.org/abs/2212.04356)
