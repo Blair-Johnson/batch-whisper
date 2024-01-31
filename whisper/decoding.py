@@ -490,7 +490,7 @@ class DecodingTask:
 
             # logit filters: applies various rules to suppress or penalize certain tokens
             self.decoder = []
-            self.logit_filters = [[]]*len(self.initial_tokens)
+            self.logit_filters = [[] for _ in range(len(self.initial_tokens))]
             for i in range(len(self.initial_tokens)):
                 # decoder: implements how to select the next tokens, given the autoregressive distribution
                 if options.beam_size is not None:
@@ -677,7 +677,7 @@ class DecodingTask:
         assert audio_features.shape[0] == tokens.shape[0]
         n_batch = tokens.shape[0]
         sum_logprobs: Tensor = torch.zeros(n_batch, device=audio_features.device)
-        no_speech_probs = [np.nan] * n_batch
+        no_speech_probs = [np.nan]*n_batch
 
         try:
             for i in range(self.sample_len):
@@ -816,7 +816,7 @@ class DecodingTask:
         fields = (texts, languages, tokens, audio_features, avg_logprobs, no_speech_probs)
         if len(set(map(len, fields))) != 1:
             raise RuntimeError(f"inconsistent result lengths: {list(map(len, fields))}")
-
+        
         return [
             DecodingResult(
                 audio_features=features,
@@ -824,11 +824,11 @@ class DecodingTask:
                 tokens=tokens,
                 text=text,
                 avg_logprob=avg_logprob,
-                no_speech_prob=no_speech_prob,
+                no_speech_prob=no_speech_prob[i],
                 temperature=self.options.temperature,
                 compression_ratio=compression_ratio(text),
             )
-            for text, language, tokens, features, avg_logprob, no_speech_prob in zip(*fields)
+            for i, (text, language, tokens, features, avg_logprob, no_speech_prob) in enumerate(zip(*fields))
         ]
 
 
